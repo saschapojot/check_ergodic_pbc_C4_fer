@@ -108,5 +108,21 @@ params2cppInFile=[
     alpha1Str+"\n",
     alpha2Str+"\n",
     alpha3Str+"\n",
+    sweep_to_write+"\n",
+    newFlushNum+"\n",
+    flushLastFile+"\n",
+    TDirRoot+"\n",
+    U_dipole_dataDir+"\n",
+    hStr+"\n",
+    sweep_multipleStr+"\n",
+    N_half_sideStr+"\n",
+    init_path+"\n"
+
 
     ]
+
+
+
+cppInParamsFileName=TDirRoot+"/cppIn.txt"
+with open(cppInParamsFileName,"w+") as fptr:
+    fptr.writelines(params2cppInFile)

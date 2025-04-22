@@ -13,7 +13,7 @@ def format_using_decimal(value, precision=15):
     return str(formatted_value)
 
 
-N=10 #unit cell number
+N=5 #unit cell number
 N0=N
 N1=N
 if N%2==0:
@@ -75,10 +75,10 @@ alpha1_Str=format_using_decimal(alpha1)
 alpha2_Str=format_using_decimal(alpha2)
 alpha3_Str=format_using_decimal(alpha3)
 
-init_path_tot=11
+init_path_tot=2
 
 J_Str=format_using_decimal(J)
-h=a/5
+h=a*q/5
 TDirsAll=[]
 TStrAll=[]
 for k in range(0,len(TVals)):
