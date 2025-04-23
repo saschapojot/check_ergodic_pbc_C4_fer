@@ -9,6 +9,7 @@
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <cfenv> // for floating-point exceptions
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -21,6 +22,7 @@ namespace fs = boost::filesystem;
 namespace py = boost::python;
 namespace np = boost::python::numpy;
 
+constexpr double PI = M_PI;
 
 class mc_computation
 {
@@ -247,6 +249,11 @@ public:
 
             this->Py_all_ptr = std::shared_ptr<double[]>(new double[sweepToWrite * N0 * N1],
                                                          std::default_delete<double[]>());
+            this->Px_init = std::shared_ptr<double[]>(new double[N0 * N1],
+                                                      std::default_delete<double[]>());
+
+            this->Py_init = std::shared_ptr<double[]>(new double[N0 * N1],
+                                                      std::default_delete<double[]>());
         }
         catch (const std::bad_alloc& e)
         {
@@ -257,37 +264,7 @@ public:
             std::cerr << "Exception: " << e.what() << std::endl;
             std::exit(2);
         }
-        //constrcuting neighbors
-        for (int n0=-Nx;n0<Nx+1;n0++)
-        {
-            for (int n1=-Ny;n1<Ny+1;n1++)
-            {
-                if (n0==0 and n1==0)
-                {
-                    continue;
-                }else
-                {
-                    this->neigbors.push_back({n0,n1});
-                }
-            }//end for n1
-        }//end for n0
-            //print neighbors
-        for (const auto & vec:neigbors)
-        {
-            print_vector(vec);
-            double tmp=std::pow(static_cast<double>(vec[0]),2.0)
-            +std::pow(static_cast<double>(vec[1]),2.0);
-            this->neighbors_r.push_back({static_cast<double>(vec[0])*a,static_cast<double>(vec[1])*a});
-            this->neighbors_r2.push_back(tmp);
-            this->neighbors_r4.push_back(std::pow(tmp,2.0));
-        }
 
-        print_vector(neighbors_r2);
-        print_vector(neighbors_r4);
-        for (const auto& vec:neighbors_r)
-        {
-            print_vector(vec);
-        }
         this->out_U_path = this->U_dipole_dataDir + "/U/";
         if (!fs::is_directory(out_U_path) || !fs::exists(out_U_path))
         {
@@ -311,14 +288,50 @@ public:
         std::cout << "dipole_lower_bound=" << dipole_lower_bound << std::endl;
 
         this->a_squared = std::pow(a, 2.0);
-        this->J_over_a_squared = J / a_squared;
-        std::cout << "J_over_a_squared=" << J_over_a_squared << std::endl;
+      std::cout<<"PI="<<PI<<std::endl;
+        this->theta=PI/2.0;
+        this->U4={{std::cos(theta),-std::sin(theta)},{std::sin(theta),std::cos(theta)}};
+        U4.print("U4:");
     }//end constructor
 
 public:
-    double H2(const int&n0, const int& n1, const int& ind_neighbor, const std::vector<int>& vec_neighbor,
-    const arma::dvec& Px_arma_vec_curr,
-                const arma::dvec& Py_arma_vec_curr);
+    void init_and_run();
+    void execute_mc(const std::shared_ptr<double[]>& Px_vec,
+                    const std::shared_ptr<double[]>& Py_vec,const int& flushNum);
+    void execute_mc_one_sweep(arma::dvec& Px_arma_vec_curr,
+                              arma::dvec& Py_arma_vec_curr,
+                              double& U_base_value,
+                              arma::dvec& Px_arma_vec_next,
+                              arma::dvec& Py_arma_vec_next);
+    //local update of Py
+    void H_update_Py(const int &flattened_ind,const arma::dvec &Px_arma_vec_curr,
+        const arma::dvec& Py_arma_vec_curr,
+       const arma::dvec& Py_arma_vec_next, double& UCurr, double& UNext);
+    //local update of Px
+    void H_update_Px(const int &flattened_ind,const arma::dvec &Px_arma_vec_curr,
+        const arma::dvec& Py_arma_vec_curr,const arma::dvec& Px_arma_vec_next,
+        double& UCurr, double& UNext);
+    ///
+    /// @param Px_arma_vec
+    /// @param Py_arma_vec
+    /// @param rotated_Px_arma_vec Px after C4 rotation
+    /// @param rotated_Py_arma_vec Py after C4 rotation
+    void rotated_Px_Py(const arma::dvec &Px_arma_vec,const arma::dvec& Py_arma_vec,
+                       arma::dvec& rotated_Px_arma_vec, arma::dvec& rotated_Py_arma_vec);
+    arma::dvec p_2_p_tilde(const int &n0,const int & n1,const arma::dvec &Px_arma_vec,const arma::dvec& Py_arma_vec);
+
+    void C_next(const int &n0,const int &n1, int &n0_next,int &n1_next);
+    void C_prev(const int &n0,const int &n1, int &n0_next,int &n1_next);
+    void init_flattened_ind_and_neighbors();//neighbors around (0,0)
+    double H_tot(const arma::dvec& Px_arma_vec, const arma::dvec& Py_arma_vec);
+    ///
+    /// @param flattened_ind_center (flattened) index of dipole to be updated
+    /// @param ind_neighbor  index of dipole around the center dipole (0..7)
+    /// @param Px_arma_vec
+    /// @param Py_arma_vec
+    /// @return interaction energy
+    double H2(const int& flattened_ind_center,const int& ind_neighbor, const arma::dvec& Px_arma_vec, const arma::dvec& Py_arma_vec );
+    void construct_neighbors_1_point();
     int mod_direction0(const int&m0);
     int mod_direction1(const int&m1);
     void init_Px_Py();
@@ -410,7 +423,7 @@ public:
     double a;
     double a_squared;
     double J;
-    double J_over_a_squared;
+    // double J_over_a_squared;
     int N0;
     int N1;
     int Nx;
@@ -444,12 +457,18 @@ public:
 
     double dipole_lower_bound;
     double dipole_upper_bound;
+    arma::dmat U4;
+    double theta;
+std::vector<std::vector<int>> neigbors;//around (0,0)
+    std::vector<std::vector<double>>neighbors_r;//around (0,0)
+    std::vector<double> neighbors_r2;//around (0,0)
+    std::vector<double> neighbors_r4;//around (0,0)
 
+    std::vector<std::vector<int>> flattened_ind_neighbors;// a point (flattened index) and its neighbors(also flattened ind)
+    std::vector<std::vector<std::vector<double>>>flattened_ind_neighbors_r;// a point (flattened index) and its vectors to neighbors
+    std::vector<std::vector<double>> flattened_ind_neighbors_r2; //a point (flatttend index) 's distance squared to neigbors
+    std::vector<std::vector<double>> flattened_ind_neighbors_r4; //a point (flatttend index) 's distance quartic to neighbors
 
-std::vector<std::vector<int>> neigbors;
-    std::vector<std::vector<double>>neighbors_r;
-    std::vector<double> neighbors_r2;
-    std::vector<double> neighbors_r4;
 };
 
 
